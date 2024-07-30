@@ -1,0 +1,24 @@
+[package]
+name = "rusty-scheduler"
+version = "0.1.0"
+edition = "2021"
+authors = ["MASACR99"]
+description = "Simple scheduler that executes function pointers following a cron string"
+readme = "README.md"
+repository = "https://github.com/MASACR99/rusty-scheduler"
+keywords = ["utility", "utilities", "automation"]
+license = "GPL-3.0-only"
+
+[dependencies]
+chrono = "0.4.38"
+
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
+
+[dependencies.rusty-cron]
+path = "../rusty-cron" # TODO: Change this path for the uploaded cron
