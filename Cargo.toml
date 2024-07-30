@@ -11,6 +11,7 @@ license = "GPL-3.0-only"
 
 [dependencies]
 chrono = "0.4.38"
+rusty-cron = "0.8.0"
 
 [dependencies.uuid]
 version = "1.10.0"
@@ -19,6 +20,3 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
-
-[dependencies.rusty-cron]
-path = "../rusty-cron" # TODO: Change this path for the uploaded cron

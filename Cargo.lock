@@ -188,6 +188,8 @@ dependencies = [
 [[package]]
 name = "rusty-cron"
 version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95a85eb47005481d3b9ddabd483fae0dd4e85a50f38626e4923a3a448f3890d2"
 dependencies = [
  "chrono",
 ]
