@@ -33,7 +33,8 @@ impl SchedulerConfigOptions {
 
 pub struct Scheduler{
     tasks: Arc<Mutex<Vec<Task>>>,
-    config: Arc<SchedulerConfigOptions>
+    config: Arc<SchedulerConfigOptions>,
+    is_started: bool
 }
 impl Scheduler{
     pub fn new(config: Option<SchedulerConfigOptions>) -> Scheduler{
@@ -43,56 +44,60 @@ impl Scheduler{
             None => config_options = Arc::new(SchedulerConfigOptions::new(250,1000))
         }
         
-        let scheduler: Scheduler = Scheduler {tasks: Arc::new(Mutex::new(Vec::new())), config: config_options};
+        let scheduler: Scheduler = Scheduler {tasks: Arc::new(Mutex::new(Vec::new())), config: config_options, is_started: false};
         return scheduler;
     }
 
-    pub fn startup(&self){
-        let tasks: Arc<Mutex<Vec<Task>>> = self.tasks.clone();
-        let config: Arc<SchedulerConfigOptions> = self.config.clone();
-        std::thread::spawn(move || {
-            let mut running_tasks: HashMap<Uuid, thread::JoinHandle<()>> = HashMap::new();
-            loop {
-                let now: DateTime<Utc> = chrono::Utc::now();
+    pub fn startup(&mut self){
+        if !self.is_started {
+            let tasks: Arc<Mutex<Vec<Task>>> = self.tasks.clone();
+            let config: Arc<SchedulerConfigOptions> = self.config.clone();
+            std::thread::spawn(move || {
+                let mut running_tasks: HashMap<Uuid, thread::JoinHandle<()>> = HashMap::new();
+                loop {
+                    let now: DateTime<Utc> = chrono::Utc::now();
 
-                // To avoid concurrency problems we lock the mutex that protects the tasks array
-                let mut guard = (&*tasks).lock().unwrap();
-                for task in &mut *guard {
-                    // If current task is on running map and has finished, clear from map and get next exec
-                    if running_tasks.contains_key(&task.task_id) && running_tasks.get(&task.task_id).unwrap().is_finished() {
-                        running_tasks.remove(&task.task_id);
-                        let cloned_now = now.clone();
-                        //Old time to exec +1 second to avoid executing the same time frame, instead cron will return next execution
-                        let old_time_exec = task.time_to_exec.checked_add_signed(TimeDelta::seconds(1)); 
-                        let time = cloned_now.checked_add_signed(Duration::milliseconds(Cron::parse_time(&task.cron, old_time_exec).unwrap())).unwrap();
-                        task.time_to_exec = time;
+                    // To avoid concurrency problems we lock the mutex that protects the tasks array
+                    let mut guard = (&*tasks).lock().unwrap();
+                    for task in &mut *guard {
+                        // If current task is on running map and has finished, clear from map and get next exec
+                        if running_tasks.contains_key(&task.task_id) && running_tasks.get(&task.task_id).unwrap().is_finished() {
+                            running_tasks.remove(&task.task_id);
+                            let cloned_now = now.clone();
+                            //Old time to exec +1 second to avoid executing the same time frame, instead cron will return next execution
+                            let old_time_exec = task.time_to_exec.checked_add_signed(TimeDelta::seconds(1)); 
+                            let time = cloned_now.checked_add_signed(Duration::milliseconds(Cron::parse_time(&task.cron, old_time_exec).unwrap())).unwrap();
+                            task.time_to_exec = time;
+                        }
+                        
+                        let task_threshold: u64;
+
+                        match task.execution_threshold_millis {
+                            Some(n) => task_threshold = n,
+                            None => task_threshold = config.execution_threshold_millis
+                        }
+
+                        // If either execution should've happened in the past or execution is in the next few millis
+                        // execute function of task
+                        // Not "else if" because when the task has ended we want to know if it needs to execute now or within threshold
+                        if !running_tasks.contains_key(&task.task_id) && 
+                            ((task.time_to_exec - now).num_milliseconds() < task_threshold.try_into().unwrap())  
+                        {
+                            let task_to_run = task.clone();
+                            let join_handle = thread::spawn(move || {
+                                (task_to_run.function_to_exec)();
+                            });
+
+                            running_tasks.insert(task.task_id, join_handle);
+                        }
                     }
-                    
-                    let task_threshold: u64;
 
-                    match task.execution_threshold_millis {
-                        Some(n) => task_threshold = n,
-                        None => task_threshold = config.execution_threshold_millis
-                    }
-
-                    // If either execution should've happened in the past or execution is in the next few millis
-                    // execute function of task
-                    // Not "else if" because when the task has ended we want to know if it needs to execute now or within threshold
-                    if !running_tasks.contains_key(&task.task_id) && 
-                        ((task.time_to_exec - now).num_milliseconds() < task_threshold.try_into().unwrap())  
-                    {
-                        let task_to_run = task.clone();
-                        let join_handle = thread::spawn(move || {
-                            (task_to_run.function_to_exec)();
-                        });
-
-                        running_tasks.insert(task.task_id, join_handle);
-                    }
+                    thread::sleep(time::Duration::from_millis(config.scheduler_wait_millis));
                 }
+            });
 
-                thread::sleep(time::Duration::from_millis(config.scheduler_wait_millis));
-            }
-        });
+            self.is_started = true;
+        }
     }
 
     pub fn add_task(&mut self, cron: &str, function_to_exec: fn(), execution_threshold_millis: Option<u64>) -> Result<Uuid,String>{
