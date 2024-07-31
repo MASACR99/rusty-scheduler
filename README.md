@@ -1,4 +1,4 @@
-# rusty-scheduler
+# rusty-cron-scheduler
 Lightweight and performant library to use cron formatted strings to trigger function pointers.
 
 1. [About](#about)

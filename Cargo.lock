@@ -195,7 +195,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusty-scheduler"
+name = "rusty-cron-scheduler"
 version = "0.1.0"
 dependencies = [
  "chrono",
